@@ -178,7 +178,7 @@
   // so every scroll notch / second covers the same *ratio* of distance (feels like constant speed).
   const APPROACH = 5.2, H_FAR = 500, H_LAND = 3;
   const altitude = e => H_LAND * Math.pow(H_FAR / H_LAND, 1 - e);
-  let e = reduce ? 1 : 0, target = 1, introDone = reduce, landed = false;
+  let e = reduce ? .3 : 0, target = 1, introDone = false, landed = false, fading = false;
   const smooth = x => x * x * (3 - 2 * x);
 
   function setAloft(a) { document.body.classList.toggle('aloft', a); }
@@ -222,11 +222,19 @@
     S[9] = follow.x; S[10] = follow.y; S[11] = 1;
     gl.uniform2f(uR, canvas.width, canvas.height);
     gl.uniform1f(uT, 40 + t);
-    if (!introDone) {
+    if (!introDone && reduce) {
+      // Reduce Motion: no zoom. Hold on the planet, then fade to black and back up on the surface.
+      if (t > 2.2 && !fading) {
+        fading = true;
+        canvas.style.transition = 'opacity .7s ease';
+        canvas.style.opacity = '0';
+        setTimeout(() => { e = 1; target = 1; introDone = true; canvas.style.opacity = '1'; }, 750);
+      }
+    } else if (!introDone) {
       e = smooth(Math.min(Math.max((t - .4) / APPROACH, 0), 1));
       if (e >= 1) introDone = true;
     } else {
-      e += (target - e) * (1 - Math.exp(-dt * 3.2));
+      e += (target - e) * (1 - Math.exp(-dt * (reduce ? 12 : 3.2)));
     }
     gl.uniform1f(uH, altitude(e));
     gl.uniform1f(uE, e);

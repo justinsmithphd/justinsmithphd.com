@@ -29,6 +29,7 @@
 
   // one-time hint so people discover they can fly back out
   const hint = document.getElementById('hint');
+  if (hint && matchMedia('(pointer: coarse)').matches) hint.textContent = 'swipe down to leave orbit';
   let hinted = false;
   function showHint() {
     if (hinted || !hint) return; hinted = true;
@@ -55,6 +56,6 @@
 
   addEventListener('camo:landed', () => setTimeout(start, 350));
   // fallbacks: no WebGL, background tab, or reduced motion
-  setTimeout(start, reduce ? 0 : 7500);
+  setTimeout(start, reduce ? 4000 : 7500);
   if (!window.WebGLRenderingContext) start();
 })();
