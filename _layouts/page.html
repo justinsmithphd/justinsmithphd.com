@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+{% include head.html %}
+</head>
+<body>
+  <main class="page">
+    <header><a href="/">&larr; justin smith</a>{% if page.layout == 'note' %} / <a href="/notepad/">notepad</a>{% endif %}</header>
+    {{ content }}
+    <footer>
+      <a href="/notepad/">notepad</a> · <a href="mailto:{{ site.email }}">email</a> · <a href="/feed.xml">rss</a>
+    </footer>
+  </main>
+</body>
+</html>

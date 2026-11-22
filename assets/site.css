@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;600&display=swap');
+
+:root {
+  --bg: #0e0d0b;
+  --fg: #ece4d6;
+  --dim: #9a8f7e;
+  --rule: #2b2822;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Inconsolata, ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--dim); }
+a:hover { text-decoration-color: var(--fg); }
+::selection { background: var(--fg); color: var(--bg); }
+
+/* ---------- home ---------- */
+#camo {
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh;
+  display: block; z-index: 0;
+}
+.home {
+  position: relative; z-index: 1;
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 2rem;
+  pointer-events: none;           /* let the mouse reach the canvas */
+}
+.home .type {
+  width: min(34rem, 100%);
+  white-space: pre-wrap;
+  pointer-events: auto;
+  padding: 1.6rem 1.9rem;
+  background: rgba(14, 12, 9, .74);
+  border: 1px solid rgba(207, 195, 176, .16);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.home .type a, .home .type em { pointer-events: auto; }
+
+.cursor {
+  display: inline-block;
+  width: .6em; height: 1.05em;
+  margin-left: 1px;
+  vertical-align: -.17em;
+  background: var(--fg);
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- notepad ---------- */
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+.page header { margin-bottom: 3rem; }
+.page header a { text-decoration: none; color: var(--dim); }
+.page header a:hover { color: var(--fg); }
+.page h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 .25rem; }
+.page h2 { font-size: 1.1rem; font-weight: 600; margin: 2.5rem 0 .5rem; }
+.page h3 { font-size: 1rem; font-weight: 600; margin: 2rem 0 .5rem; }
+.meta { color: var(--dim); font-size: .9rem; }
+
+.notes { list-style: none; padding: 0; margin: 0; }
+.notes li { display: flex; gap: 1.5rem; padding: .4rem 0; border-bottom: 1px solid var(--rule); }
+.notes time { color: var(--dim); flex: 0 0 6.5rem; }
+.notes a { text-decoration: none; }
+.notes a:hover { text-decoration: underline; }
+
+.note img { max-width: 100%; }
+.note blockquote { margin: 1.5rem 0; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--dim); }
+.note pre { background: #15130f; border: 1px solid var(--rule); padding: 1rem; overflow-x: auto; font-size: .9rem; }
+.note code { font-family: inherit; }
+.note hr { border: 0; border-top: 1px solid var(--rule); margin: 2.5rem 0; }
+
+.page footer { margin-top: 4rem; color: var(--dim); font-size: .9rem; }
+
+@media (max-width: 520px) {
+  html, body { font-size: 15.5px; }
+  .notes li { flex-direction: column; gap: 0; }
+}
