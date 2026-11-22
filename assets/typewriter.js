@@ -27,14 +27,23 @@
   });
   host.appendChild(cursor);
 
+  // one-time hint so people discover they can fly back out
+  const hint = document.getElementById('hint');
+  let hinted = false;
+  function showHint() {
+    if (hinted || !hint) return; hinted = true;
+    setTimeout(() => hint.classList.add('on'), 1500);
+    addEventListener('camo:scrolled', () => hint.classList.remove('on'), { once: true });
+  }
+
   let started = false;
   function start() {
     if (started) return; started = true;
     host.classList.add('shown');
-    if (reduce) { nodes.forEach(n => (n.el.textContent = n.text)); return; }
+    if (reduce) { nodes.forEach(n => (n.el.textContent = n.text)); showHint(); return; }
     let s = 0, i = 0;
     (function tick() {
-      if (s >= nodes.length) return;
+      if (s >= nodes.length) { showHint(); return; }
       const n = nodes[s], ch = n.text[i++];
       n.el.textContent += ch;
       if (i >= n.text.length) { s++; i = 0; }

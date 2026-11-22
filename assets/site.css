@@ -50,6 +50,15 @@ a:hover { text-decoration-color: var(--fg); }
   transition: opacity .9s ease, transform .9s ease;
 }
 .home .type.shown { opacity: 1; transform: none; }
+body.aloft .home .type.shown { opacity: 0; transform: translateY(6px); pointer-events: none; }
+html, body { overflow: hidden; overscroll-behavior: none; }
+
+.hint {
+  position: fixed; left: 0; right: 0; bottom: 1.6rem; z-index: 1;
+  text-align: center; font-size: .85rem; color: rgba(236, 228, 214, .55);
+  opacity: 0; transition: opacity 1.2s ease; pointer-events: none;
+}
+.hint.on { opacity: 1; }
 .home .type a, .home .type em { pointer-events: auto; }
 
 .cursor {

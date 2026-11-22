@@ -11,7 +11,7 @@
   const VS = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
   const FS = `
   precision highp float;
-  uniform vec2 R; uniform float T; uniform vec3 S[4]; uniform float Z;
+  uniform vec2 R; uniform float T; uniform vec3 S[4]; uniform float H, E;
 
   float h1(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
   vec2  h2(vec2 p){ float n=h1(p); return vec2(n, h1(p+n)); }
@@ -87,52 +87,58 @@
     return col;
   }
 
+  // Camera on a straight line toward the planet centre, looking straight down.
+  // H = altitude above the surface, E = 0 (deep space) .. 1 (landed), only used for fades.
   void main(){
     float ar = R.x/R.y;
     vec2 uv = gl_FragCoord.xy / R.y;
     vec2 c  = vec2(.5*ar, .5);
+    vec2 x  = uv - c;
     float t = T;
 
-    // approach: planet radius grows exponentially (feels like closing distance), then we land
-    float e  = Z*Z*(3.-2.*Z);
-    float r0 = .035, r1 = 7.;
-    float rad = r0 * pow(r1/r0, e);
-    float fl = smoothstep(.86, 1., Z);
+    const float RP = 6.0;      // planet radius, in pattern units
+    const float F  = 3.0;      // focal length (narrow lens, little perspective stretch)
+    float D = RP + H;          // camera distance from planet centre
 
-    vec2  d  = (uv - c) / rad;
-    float dl = length(d);
     vec3 col = vec3(0.);
+    float px = 1.5 / R.y;
 
-    // deep space: sparse faint stars that fade as the planet fills the view
-    vec2 sg = floor(gl_FragCoord.xy/2.);
-    float st = step(.9965, h1(sg)) * (.35 + .65*h1(sg+7.)) * (.6 + .4*sin(t*2. + h1(sg)*40.));
-    col += vec3(.85,.82,.75) * st * (1. - smoothstep(.2,.7,e));
+    // apparent radius of the planet's limb on screen
+    float appR = F * RP / sqrt(max(D*D - RP*RP, 1e-4));
+    float rx = length(x);
 
-    if (dl < 1. || fl > 0.) {
-      float dc = min(dl, .999);
-      float z  = sqrt(1. - dc*dc);
-      // point on the pattern plane under this pixel of the sphere; at landing this reduces to uv
-      vec2 sph = c + (dl > 0. ? d/dl : vec2(0.)) * asin(dc) * r1;
-      sph.x += (1. - e) * t * .25;                 // slow spin while distant
-      vec2 p = mix(sph, uv, fl);
-      vec3 pc = camo(p, t, smoothstep(.35, .8, e));
-      // sunlight from upper-left while it is still a globe
-      vec3 nrm = vec3(d.x, d.y, z);
-      float lit = clamp(dot(normalize(nrm), normalize(vec3(-.55,.5,.65))), 0., 1.);
-      float globe = (1. - fl);
-      pc *= mix(1., .12 + 1.05*lit, globe * (1. - smoothstep(.55,.85,e)));
-      float edgeAA = 1. - smoothstep(1. - 2.5/(rad*R.y), 1., dl);
-      col = mix(col, pc, max(edgeAA, fl));
+    if (rx < appR + px) {
+      vec3 d = normalize(vec3(x, -F));
+      vec3 o = vec3(0., 0., D);
+      float b = dot(o, d), cc = D*D - RP*RP;
+      float tt = -b - sqrt(max(b*b - cc, 0.));
+      vec3 hit = o + tt*d;
+      vec3 nrm = hit / RP;
+      // azimuthal-equidistant unwrap around the point under the camera: arc length == ground distance
+      float th = acos(clamp(nrm.z, -1., 1.));
+      vec2 dir = length(hit.xy) > 1e-6 ? normalize(hit.xy) : vec2(0.);
+      vec2 p = c + dir * th * RP;
+
+      // fine lines fade in once a pixel is small enough on the ground to resolve them (no shimmer)
+      float foot = (H / F) / R.y;
+      float detail = 1. - smoothstep(.004, .012, foot);
+      vec3 pc = camo(p, t, detail);
+
+      // sunlight from upper-left while it still reads as a globe
+      float lit = clamp(dot(nrm, normalize(vec3(-.55,.5,.65))), 0., 1.);
+      pc *= mix(1., .12 + 1.05*lit, 1. - smoothstep(.45,.8,E));
+      float aa = 1. - smoothstep(appR - px, appR, rx);
+      col = mix(col, pc, aa);
     }
-    // thin warm atmosphere rim while distant
-    float rim = exp(-max(dl-1.,0.)*rad*R.y/6.) * smoothstep(.85,1.,dl) * (1. - smoothstep(.4,.8,e));
+    // thin warm atmosphere at the limb while distant
+    float rim = exp(-max(rx - appR, 0.) * R.y / 6.) * smoothstep(appR*.9, appR, rx) * (1. - smoothstep(.35,.7,E));
     col += vec3(.75,.62,.45) * rim * .35;
 
-    // finish: slight darken for text legibility, vignette (fades in on landing), film grain
+    // finish: slight darken for text legibility, vignette, film grain (fade in near the ground)
     vec2 q = gl_FragCoord.xy/R;
     float vig = .78 * (.72 + .28*pow(16.*q.x*q.y*(1.-q.x)*(1.-q.y), .25));
-    col *= mix(1., vig, smoothstep(.6,1.,e));
-    col += (h1(gl_FragCoord.xy + fract(t)*91.) - .5) * .03 * smoothstep(.3,1.,e);
+    col *= mix(1., vig, smoothstep(.6,1.,E));
+    col += (h1(gl_FragCoord.xy + fract(t)*91.) - .5) * .03 * smoothstep(.5,1.,E);
     gl_FragColor = vec4(col, 1.);
   }`;
 
@@ -145,7 +151,7 @@
   gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
   gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
   gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog); gl.useProgram(prog);
-  const uR = gl.getUniformLocation(prog, 'R'), uT = gl.getUniformLocation(prog, 'T'), uS = gl.getUniformLocation(prog, 'S'), uZ = gl.getUniformLocation(prog, 'Z');
+  const uR = gl.getUniformLocation(prog, 'R'), uT = gl.getUniformLocation(prog, 'T'), uS = gl.getUniformLocation(prog, 'S'), uH = gl.getUniformLocation(prog, 'H'), uE = gl.getUniformLocation(prog, 'E');
 
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -162,15 +168,45 @@
 
   // somas: three wanderers + one that eases toward the pointer
   const seeds = [0, 1, 2].map(() => [Math.random() * 100, .7 + Math.random() * .3]);
-  const target = { x: .62, y: .4 }, follow = { x: .62, y: .4 };
-  const mv = (x, y) => { target.x = x / innerWidth; target.y = 1 - y / innerHeight; };
+  const aim = { x: .62, y: .4 }, follow = { x: .62, y: .4 };
+  const mv = (x, y) => { aim.x = x / innerWidth; aim.y = 1 - y / innerHeight; };
   addEventListener('mousemove', e => mv(e.clientX, e.clientY));
   addEventListener('touchmove', e => mv(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
 
   const S = new Float32Array(12);
-  const APPROACH = 5.2;           // seconds from first light to touchdown
-  let landed = false;
-  const land = () => { if (!landed) { landed = true; dispatchEvent(new Event('camo:landed')); } };
+  // ---- flight: e in [0,1], 0 = deep space, 1 = landed. Altitude is exponential in e,
+  // so every scroll notch / second covers the same *ratio* of distance (feels like constant speed).
+  const APPROACH = 5.2, H_FAR = 500, H_LAND = 3;
+  const altitude = e => H_LAND * Math.pow(H_FAR / H_LAND, 1 - e);
+  let e = reduce ? 1 : 0, target = 1, introDone = reduce, landed = false;
+  const smooth = x => x * x * (3 - 2 * x);
+
+  function setAloft(a) { document.body.classList.toggle('aloft', a); }
+  function land() { if (!landed) { landed = true; dispatchEvent(new Event('camo:landed')); } }
+
+  // scroll up = climb back to orbit, scroll down = descend
+  addEventListener('wheel', ev => {
+    ev.preventDefault();
+    introDone = true;
+    const dy = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+    target = Math.min(1, Math.max(0, target + dy * 0.0006));
+    dispatchEvent(new Event('camo:scrolled'));
+  }, { passive: false });
+  // touch: drag down climbs, drag up descends (same direction as a scroll)
+  let ty = null;
+  addEventListener('touchstart', ev => { ty = ev.touches[0].clientY; }, { passive: true });
+  addEventListener('touchmove', ev => {
+    if (ty == null) return;
+    const y = ev.touches[0].clientY;
+    introDone = true;
+    target = Math.min(1, Math.max(0, target - (y - ty) * 0.0025)); ty = y;
+    dispatchEvent(new Event('camo:scrolled'));
+  }, { passive: true });
+  addEventListener('keydown', ev => {
+    if (ev.key === 'ArrowUp' || ev.key === 'PageUp') { introDone = true; target = Math.max(0, target - .15); }
+    if (ev.key === 'ArrowDown' || ev.key === 'PageDown' || ev.key === ' ') { introDone = true; target = Math.min(1, target + .15); }
+  });
+
   let t0 = performance.now(), last = t0;
   function frame(now) {
     const t = (now - t0) / 1000, dt = Math.min((now - last) / 1000, .05); last = now;
@@ -182,16 +218,23 @@
       S[i * 3 + 2] = str;
     });
     const ease = 1 - Math.exp(-dt * 1.6);
-    follow.x += (target.x - follow.x) * ease; follow.y += (target.y - follow.y) * ease;
+    follow.x += (aim.x - follow.x) * ease; follow.y += (aim.y - follow.y) * ease;
     S[9] = follow.x; S[10] = follow.y; S[11] = 1;
     gl.uniform2f(uR, canvas.width, canvas.height);
     gl.uniform1f(uT, 40 + t);
-    const z = reduce ? 1 : Math.min(Math.max((t - .5) / APPROACH, 0), 1);
-    gl.uniform1f(uZ, z);
-    if (z >= .97) land();
+    if (!introDone) {
+      e = smooth(Math.min(Math.max((t - .4) / APPROACH, 0), 1));
+      if (e >= 1) introDone = true;
+    } else {
+      e += (target - e) * (1 - Math.exp(-dt * 3.2));
+    }
+    gl.uniform1f(uH, altitude(e));
+    gl.uniform1f(uE, e);
+    if (e >= .97) land();
+    setAloft(e < .93);
     gl.uniform3fv(uS, S);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (!reduce) requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 })();
