@@ -1,10 +1,8 @@
 title: Justin Smith, Ph.D.
-description: Neuroscientist turned AI and data executive. Notes on brains, machine learning, and building things.
+description: Justin Smith, Ph.D. Neuroscientist and AI leader. Founder of Advanced Analytics Group and Tactical Neuroscience.
 url: https://justinsmithphd.com
-email: hello@justinsmithphd.com   # TODO: replace with your real address
 author: Justin Smith
 
-permalink: /notepad/:title/
 markdown: kramdown
 kramdown:
   input: GFM
