@@ -1,4 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;600&display=swap');
+/* Inconsolata (SIL Open Font License), self-hosted so the site loads nothing from third parties */
+@font-face { font-family: Inconsolata; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('fonts/inconsolata-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: Inconsolata; font-style: normal; font-weight: 600; font-display: swap;
+  src: url('fonts/inconsolata-latin-600-normal.woff2') format('woff2'); }
 
 :root {
   --bg: #0e0d0b;
