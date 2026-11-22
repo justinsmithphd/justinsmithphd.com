@@ -11,7 +11,7 @@
   const VS = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
   const FS = `
   precision highp float;
-  uniform vec2 R; uniform float T; uniform vec3 S[4];
+  uniform vec2 R; uniform float T; uniform vec3 S[4]; uniform float Z;
 
   float h1(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
   vec2  h2(vec2 p){ float n=h1(p); return vec2(n, h1(p+n)); }
@@ -31,10 +31,9 @@
     return vec3(sqrt(d1), sqrt(d2)-sqrt(d1), id);
   }
 
-  void main(){
+  // the pattern itself, in screen-height units. detail fades fine lines in on approach (anti-shimmer)
+  vec3 camo(vec2 uv, float t, float detail){
     float ar = R.x/R.y;
-    vec2 uv = gl_FragCoord.xy / R.y;
-    float t = T;
 
     // slow domain warp: the whole pattern creeps
     vec2 w = uv + .13*vec2(fbm(uv*1.4 + t*.018), fbm(uv*1.4 - t*.015 + 5.2));
@@ -74,21 +73,66 @@
     float shade = 1. - .35*smoothstep(.0,.45, mix(vc.x, vf.x, k));      // darker toward cell centre
     vec3 cellCol = mix(rust, brown, step(.80, idv)) * (.85 + .3*shade);
     col = mix(col, cellCol, fill*patchy*.75);
-    col = mix(col, mix(tan, cream, .55), edge*patchy*.6);
+    col = mix(col, mix(tan, cream, .55), edge*patchy*.6*detail);
 
     // dendrites / wire: thin noise isolines, mostly near somas, faint elsewhere
     float a = noise(w*6.5 + t*.025) - .5, b = noise(w*12. + 40. - t*.02) - .5;
     float l1 = 1.-smoothstep(0.,.016,abs(a)), l2 = 1.-smoothstep(0.,.011,abs(b));
     float wireMask = smoothstep(.05,.45,field)*.9 + .18*smoothstep(.55,.7,fbm(w*1.7+60.));
-    col = mix(col, cream*1.05, clamp((l1*.55 + l2*.4)*wireMask, 0., 1.)*.6);
+    col = mix(col, cream*1.05, clamp((l1*.55 + l2*.4)*wireMask, 0., 1.)*.6*detail);
 
     // cell bodies themselves: subtle dark nucleus with a pale membrane
     col = mix(col, brown*.75, clamp(core,0.,1.)*.55);
 
-    // finish: slight darken for text legibility, vignette, film grain
+    return col;
+  }
+
+  void main(){
+    float ar = R.x/R.y;
+    vec2 uv = gl_FragCoord.xy / R.y;
+    vec2 c  = vec2(.5*ar, .5);
+    float t = T;
+
+    // approach: planet radius grows exponentially (feels like closing distance), then we land
+    float e  = Z*Z*(3.-2.*Z);
+    float r0 = .035, r1 = 7.;
+    float rad = r0 * pow(r1/r0, e);
+    float fl = smoothstep(.86, 1., Z);
+
+    vec2  d  = (uv - c) / rad;
+    float dl = length(d);
+    vec3 col = vec3(0.);
+
+    // deep space: sparse faint stars that fade as the planet fills the view
+    vec2 sg = floor(gl_FragCoord.xy/2.);
+    float st = step(.9965, h1(sg)) * (.35 + .65*h1(sg+7.)) * (.6 + .4*sin(t*2. + h1(sg)*40.));
+    col += vec3(.85,.82,.75) * st * (1. - smoothstep(.2,.7,e));
+
+    if (dl < 1. || fl > 0.) {
+      float dc = min(dl, .999);
+      float z  = sqrt(1. - dc*dc);
+      // point on the pattern plane under this pixel of the sphere; at landing this reduces to uv
+      vec2 sph = c + (dl > 0. ? d/dl : vec2(0.)) * asin(dc) * r1;
+      sph.x += (1. - e) * t * .25;                 // slow spin while distant
+      vec2 p = mix(sph, uv, fl);
+      vec3 pc = camo(p, t, smoothstep(.35, .8, e));
+      // sunlight from upper-left while it is still a globe
+      vec3 nrm = vec3(d.x, d.y, z);
+      float lit = clamp(dot(normalize(nrm), normalize(vec3(-.55,.5,.65))), 0., 1.);
+      float globe = (1. - fl);
+      pc *= mix(1., .12 + 1.05*lit, globe * (1. - smoothstep(.55,.85,e)));
+      float edgeAA = 1. - smoothstep(1. - 2.5/(rad*R.y), 1., dl);
+      col = mix(col, pc, max(edgeAA, fl));
+    }
+    // thin warm atmosphere rim while distant
+    float rim = exp(-max(dl-1.,0.)*rad*R.y/6.) * smoothstep(.85,1.,dl) * (1. - smoothstep(.4,.8,e));
+    col += vec3(.75,.62,.45) * rim * .35;
+
+    // finish: slight darken for text legibility, vignette (fades in on landing), film grain
     vec2 q = gl_FragCoord.xy/R;
-    col *= .78 * (.72 + .28*pow(16.*q.x*q.y*(1.-q.x)*(1.-q.y), .25));
-    col += (h1(gl_FragCoord.xy + fract(t)*91.) - .5) * .03;
+    float vig = .78 * (.72 + .28*pow(16.*q.x*q.y*(1.-q.x)*(1.-q.y), .25));
+    col *= mix(1., vig, smoothstep(.6,1.,e));
+    col += (h1(gl_FragCoord.xy + fract(t)*91.) - .5) * .03 * smoothstep(.3,1.,e);
     gl_FragColor = vec4(col, 1.);
   }`;
 
@@ -101,7 +145,7 @@
   gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
   gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
   gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog); gl.useProgram(prog);
-  const uR = gl.getUniformLocation(prog, 'R'), uT = gl.getUniformLocation(prog, 'T'), uS = gl.getUniformLocation(prog, 'S');
+  const uR = gl.getUniformLocation(prog, 'R'), uT = gl.getUniformLocation(prog, 'T'), uS = gl.getUniformLocation(prog, 'S'), uZ = gl.getUniformLocation(prog, 'Z');
 
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -124,6 +168,9 @@
   addEventListener('touchmove', e => mv(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
 
   const S = new Float32Array(12);
+  const APPROACH = 5.2;           // seconds from first light to touchdown
+  let landed = false;
+  const land = () => { if (!landed) { landed = true; dispatchEvent(new Event('camo:landed')); } };
   let t0 = performance.now(), last = t0;
   function frame(now) {
     const t = (now - t0) / 1000, dt = Math.min((now - last) / 1000, .05); last = now;
@@ -139,6 +186,9 @@
     S[9] = follow.x; S[10] = follow.y; S[11] = 1;
     gl.uniform2f(uR, canvas.width, canvas.height);
     gl.uniform1f(uT, 40 + t);
+    const z = reduce ? 1 : Math.min(Math.max((t - .5) / APPROACH, 0), 1);
+    gl.uniform1f(uZ, z);
+    if (z >= .97) land();
     gl.uniform3fv(uS, S);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (!reduce) requestAnimationFrame(frame);
